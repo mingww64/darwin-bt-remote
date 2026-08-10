@@ -173,6 +173,26 @@ extension HIDCentral: @preconcurrency CBCentralManagerDelegate {
         }
     }
 
+    #if os(iOS)
+    func centralManager(
+        _ central: CBCentralManager,
+        connectionEventDidOccur event: CBConnectionEvent,
+        for peripheral: CBPeripheral
+    ) {
+        _trace("connectionEventDidOccur: \(event.rawValue) for \(peripheral.identifier)")
+        peripheralCache[peripheral.identifier] = peripheral
+        switch event {
+        case .peerConnected:
+            connected.insert(peripheral.identifier)
+            refreshKnownPeripherals()
+        case .peerDisconnected:
+            connected.remove(peripheral.identifier)
+        @unknown default:
+            break
+        }
+    }
+    #endif
+
     func centralManager(
         _ central: CBCentralManager,
         didDiscover peripheral: CBPeripheral,

@@ -363,12 +363,13 @@ final class HIDPeripheral: NSObject, ObservableObject {
     private func updateValue(_ data: Data, for char: CBMutableCharacteristic) -> Bool {
         guard let pManager else { return false }
         let recipients = activeRecipients()
-        guard !recipients.isEmpty else { return false }
+        if !inactiveCentrals.isEmpty, recipients.isEmpty { return false }
         if !isReadyToSendNotification {
             pendingBroadcast = (data, char)
             return false
         }
-        let accepted = pManager.updateValue(data, for: char, onSubscribedCentrals: recipients)
+        let targetCentrals: [CBCentral]? = recipients.isEmpty ? nil : recipients
+        let accepted = pManager.updateValue(data, for: char, onSubscribedCentrals: targetCentrals)
         if !accepted {
             isReadyToSendNotification = false
             pendingBroadcast = (data, char)
@@ -380,8 +381,9 @@ final class HIDPeripheral: NSObject, ObservableObject {
         guard let (data, char) = pendingBroadcast, let pManager else { return }
         pendingBroadcast = nil
         let recipients = activeRecipients()
-        guard !recipients.isEmpty else { return }
-        let accepted = pManager.updateValue(data, for: char, onSubscribedCentrals: recipients)
+        if !inactiveCentrals.isEmpty, recipients.isEmpty { return }
+        let targetCentrals: [CBCentral]? = recipients.isEmpty ? nil : recipients
+        let accepted = pManager.updateValue(data, for: char, onSubscribedCentrals: targetCentrals)
         if !accepted {
             isReadyToSendNotification = false
             pendingBroadcast = (data, char)
