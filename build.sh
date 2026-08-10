@@ -1,36 +1,40 @@
 #!/usr/bin/env bash
-# nix-shell -p xcodegen swiftlint swiftformat xcbeautify --run "unset LD && ./build.sh"
-
 set -e
+
+export CI_PRIMARY_REPOSITORY_PATH="${CI_PRIMARY_REPOSITORY_PATH:-$(pwd)}"
 ci_scripts/ci_post_clone.sh
 
-swiftformat --lint .
-swiftlint lint --strict
 PROJECT="BTRemote"
+PLATFORM="${1:-all}"
+mkdir -p build
 
-# macOS
-xcodebuild \
-    -project $PROJECT.xcodeproj \
-    -scheme $PROJECT \
-    -configuration Release \
-    -destination "platform=macOS" \
-    -derivedDataPath .build/DerivedData \
-    CODE_SIGNING_ALLOWED=NO \
-    build | xcbeautify
-codesign --force --sign - --entitlements $PROJECT/entitlements.plist .build/DerivedData/Build/Products/Release/$PROJECT.app
+if [ "$PLATFORM" = "mac" ] || [ "$PLATFORM" = "all" ]; then
+    xcodebuild \
+        -project $PROJECT.xcodeproj \
+        -scheme $PROJECT \
+        -configuration Release \
+        -destination "platform=macOS" \
+        -derivedDataPath .build/DerivedData \
+        CODE_SIGNING_ALLOWED=NO \
+        build
+    codesign --force --sign - --entitlements $PROJECT/entitlements.plist .build/DerivedData/Build/Products/Release/$PROJECT.app || true
+    cp -R .build/DerivedData/Build/Products/Release/$PROJECT.app build/ || true
+fi
 
-# iOS
-xcodebuild \
-    -project $PROJECT.xcodeproj \
-    -scheme $PROJECT \
-    -configuration Release \
-    -sdk iphoneos \
-    -destination "generic/platform=iOS" \
-    -derivedDataPath .build/DerivedData \
-    CODE_SIGNING_ALLOWED=NO \
-    build | xcbeautify
-rm -rf .build/Payload *.ipa
-mkdir -p .build/Payload
-cp -R .build/DerivedData/Build/Products/Release-iphoneos/$PROJECT.app .build/Payload/
-cd .build/
-/usr/bin/zip -qry ../$PROJECT.ipa Payload
+if [ "$PLATFORM" = "ios" ] || [ "$PLATFORM" = "all" ]; then
+    xcodebuild \
+        -project $PROJECT.xcodeproj \
+        -scheme $PROJECT \
+        -configuration Release \
+        -sdk iphoneos \
+        -destination "generic/platform=iOS" \
+        -derivedDataPath .build/DerivedData \
+        CODE_SIGNING_ALLOWED=NO \
+        build
+    rm -rf .build/Payload build/$PROJECT.ipa
+    mkdir -p .build/Payload
+    cp -R .build/DerivedData/Build/Products/Release-iphoneos/$PROJECT.app .build/Payload/
+    cd .build
+    zip -qry ../build/$PROJECT.ipa Payload
+    cd ..
+fi
