@@ -31,6 +31,7 @@ if [ "$PLATFORM" = "ios" ] || [ "$PLATFORM" = "all" ]; then
         -derivedDataPath .build/DerivedData \
         CODE_SIGNING_ALLOWED=NO \
         build
+    codesign --force --sign - --entitlements $PROJECT/entitlements.plist .build/DerivedData/Build/Products/Release-iphoneos/$PROJECT.app || true
     rm -rf .build/Payload build/$PROJECT.ipa
     mkdir -p .build/Payload
     cp -R .build/DerivedData/Build/Products/Release-iphoneos/$PROJECT.app .build/Payload/
