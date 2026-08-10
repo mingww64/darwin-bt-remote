@@ -180,6 +180,9 @@ struct SetupView: View {
                 Button(role: .destructive) { lowEnergy.stop() } label: {
                     Label(L10n.Action.stopAdvertising, systemImage: "stop.circle")
                 }
+                Button { lowEnergy.forceRefreshConnections() } label: {
+                    Label("Refresh Connection", systemImage: "arrow.clockwise")
+                }
             } else {
                 Button { _startAdvertising() } label: {
                     Label(L10n.Action.startAdvertising, systemImage: "antenna.radiowaves.left.and.right")

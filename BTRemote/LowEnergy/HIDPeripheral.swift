@@ -137,11 +137,24 @@ final class HIDPeripheral: NSObject, ObservableObject {
 
     /// if host connects but never subscribes (stale GATT cache), cycle a temp service to fire Service Changed so it re-discovers
     func scheduleServiceChanged() {
-        guard UserDefaults.standard.bool(forKey: AppSettings.useServiceChangedKey), !serviceChangedArmed else { return }
+        guard !serviceChangedArmed else { return }
         serviceChangedArmed = true
         Task { [weak self] in
             try? await Task.sleep(nanoseconds: Self.serviceChangedGrace)
+            self?.serviceChangedArmed = false
             self?._cycleServiceChangedIfUnsubscribed()
+        }
+    }
+
+    func forceRefreshConnections() {
+        _cycleServiceChanged()
+        if isAdvertising {
+            pManager?.stopAdvertising()
+            isAdvertising = false
+            Task { [weak self] in
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                self?.startAdvertisingNow()
+            }
         }
     }
 
@@ -398,9 +411,22 @@ final class HIDPeripheral: NSObject, ObservableObject {
 
     private func _trackInteraction(from central: CBCentral) {
         centralObjects[central.identifier] = central
-        guard !connectedCentrals.contains(central.identifier) else { return }
-        connectedCentrals.insert(central.identifier)
-        _trace("central tracked: \(central.identifier)")
+        if !connectedCentrals.contains(central.identifier) {
+            connectedCentrals.insert(central.identifier)
+            _trace("central tracked: \(central.identifier)")
+        }
+        if subscribedCentrals[central.identifier] == nil || subscribedCentrals[central.identifier]?.isEmpty == true {
+            let defaultServices: Set<CBUUID> = [
+                HIDProfile.report,
+                HIDProfile.bootKeyboardInputReport,
+                HIDProfile.bootMouseInputReport,
+                HIDProfile.batteryLevel
+            ]
+            subscribedCentrals[central.identifier] = defaultServices
+            _trace("central auto-subscribed: \(central.identifier)")
+            if let char = charsByReportID[ReportID.mouse.rawValue] { _ = updateValue(MouseReport.zero.data, for: char) }
+            if let char = charsByReportID[ReportID.keyboard.rawValue] { _ = updateValue(KeyboardReport.zero.data, for: char) }
+        }
     }
 
     private func activeRecipients() -> [CBCentral] {
@@ -469,6 +495,7 @@ extension HIDPeripheral: @preconcurrency CBPeripheralManagerDelegate {
         } else {
             isAdvertising = true
             _trace("advertising as \(advertiseLocalName)")
+            scheduleServiceChanged()
         }
     }
 
